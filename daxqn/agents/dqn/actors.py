@@ -23,13 +23,14 @@ from acme import adders
 from acme import core
 from acme import types
 # Internal imports.
-from acme.tf import utils as tf2_utils
-from acme.tf import variable_utils as tf2_variable_utils
+from acme.jax import utils as jax_utils
+from acme.jax import variable_utils as jax_variable_utils
 
 import dm_env
 import haiku as hk
+import jax
 import tensorflow as tf
-import tensorflow_probability as tfp
+import tensorflow_probability.substrates.jax as tfp
 
 tfd = tfp.distributions
 
@@ -46,7 +47,7 @@ class CustomDiscreteFeedForwardActor(core.Actor):
       self,
       policy_network: hk.Module,
       adder: Optional[adders.Adder] = None,
-      variable_client: Optional[tf2_variable_utils.VariableClient] = None,
+      variable_client: Optional[jax_variable_utils.VariableClient] = None,
   ):
     """Initializes the actor.
 
@@ -63,10 +64,10 @@ class CustomDiscreteFeedForwardActor(core.Actor):
     self._variable_client = variable_client
     self._policy_network = policy_network
 
-  @tf.function
+  @jax.jit
   def _policy(self, observation: types.NestedTensor) -> types.NestedTensor:
     # Add a dummy batch dimension and as a side effect convert numpy to TF.
-    batched_observation = tf2_utils.add_batch_dim(observation)
+    batched_observation = jax_utils.add_batch_dim(observation)
 
     # Compute the policy, conditioned on the observation.
     policy = self._policy_network(batched_observation)
@@ -81,7 +82,7 @@ class CustomDiscreteFeedForwardActor(core.Actor):
     action = self._policy(observation)
 
     # Return a numpy array with squeezed out batch dimension.
-    return tf2_utils.to_numpy_squeeze(action)
+    return jax_utils.to_numpy_squeeze(action)
 
   def observe_first(self, timestep: dm_env.TimeStep):
     if self._adder:
