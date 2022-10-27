@@ -29,7 +29,6 @@ from acme.jax import variable_utils as jax_variable_utils
 import dm_env
 import haiku as hk
 import jax
-import tensorflow as tf
 import tensorflow_probability.substrates.jax as tfp
 
 tfd = tfp.distributions

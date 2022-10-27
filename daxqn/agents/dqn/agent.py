@@ -25,12 +25,12 @@ from acme.adders import reverb as adders
 from acme.agents import agent
 from agents.dqn.actors import CustomDiscreteFeedForwardActor
 from agents.dqn import learning
-from acme.tf import savers as tf2_savers
-from acme.tf import utils as tf2_utils
+from acme.jax import savers as jax_savers
+from acme.jax import utils as jax_utils
 from acme.utils import loggers
 import reverb
 import haiku as hk
-import tensorflow as tf
+import jax.numpy as jnp
 
 from functools import partial
 
@@ -101,7 +101,7 @@ class DQN(agent.Agent):
         discount=discount)
 
     # The dataset provides an interface to sample from replay.
-    replay_client = reverb.TFClient(address)
+    replay_client = reverb.Client(address)
     dataset = datasets.make_reverb_dataset(
         server_address=address,
         batch_size=batch_size,
@@ -110,7 +110,8 @@ class DQN(agent.Agent):
     # Use constant 0.05 epsilon greedy policy by default.
     if epsilon is None:
       epsilon = 0.05
-    epsilon = tf.Variable(epsilon, trainable=False)
+    # TODO check if I need to change this somehow
+    # epsilon = tf.Variable(epsilon, trainable=False)
 
     epsilon_greedy = partial(epsilon_greedy_base, config.decouple)
 
@@ -122,12 +123,12 @@ class DQN(agent.Agent):
 
     policy_network = hk.Sequential([
         *network_combined,
-        lambda q: epsilon_greedy(tf.maximum(*q), epsilon=epsilon),
+        lambda q: epsilon_greedy(jnp.maximum(*q), epsilon=epsilon),
     ])
 
     eval_policy_network = hk.Sequential([
         *network_combined,
-        lambda q: epsilon_greedy(tf.maximum(*q), epsilon=0.0),
+        lambda q: epsilon_greedy(jnp.maximum(*q), epsilon=0.0),
     ])
 
     # Create a target network.
@@ -136,12 +137,12 @@ class DQN(agent.Agent):
     # Ensure that we create the variables before proceeding (maybe not needed).
     obs_spec = environment_spec.observations
     if config.use_pixels:
-      emb_spec = tf2_utils.create_variables(encoder, [obs_spec])
+      emb_spec = jax_utils.create_variables(encoder, [obs_spec])
     else:
       emb_spec = obs_spec
 
-    tf2_utils.create_variables(network, [emb_spec])
-    tf2_utils.create_variables(target_network, [emb_spec])
+    jax_utils.create_variables(network, [emb_spec])
+    jax_utils.create_variables(target_network, [emb_spec])
 
     # Create the actor which defines how we take actions.
     actor = CustomDiscreteFeedForwardActor(policy_network, adder)
@@ -164,7 +165,7 @@ class DQN(agent.Agent):
         checkpoint=checkpoint)
 
     if checkpoint:
-      self._checkpointer = tf2_savers.Checkpointer(
+      self._checkpointer = jax_savers.Checkpointer(
           directory=config.learner_dir,
           objects_to_save=learner.state,
           subdirectory='dqn_learner',
